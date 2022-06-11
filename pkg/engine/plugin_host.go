@@ -19,6 +19,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/pulumi/grpc-debug-interceptors"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/rpcutil"
 	pulumirpc "github.com/pulumi/pulumi/sdk/v3/proto/go"
@@ -31,10 +33,23 @@ type clientLanguageRuntimeHost struct {
 }
 
 func connectToLanguageRuntime(ctx *plugin.Context, address string) (plugin.Host, error) {
+
+	debugMetadata := map[string]interface{}{
+		"mode":    "client",
+		"address": address,
+		"plugin":  "language",
+	}
+
 	// Dial the language runtime.
 	conn, err := grpc.Dial(address, grpc.WithInsecure(),
-		grpc.WithUnaryInterceptor(rpcutil.OpenTracingClientInterceptor()),
-		grpc.WithStreamInterceptor(rpcutil.OpenTracingStreamClientInterceptor()),
+		grpc.WithChainUnaryInterceptor(
+			rpcutil.OpenTracingClientInterceptor(),
+			interceptors.DebugClientInterceptor(debugMetadata),
+		),
+		grpc.WithChainStreamInterceptor(
+			rpcutil.OpenTracingStreamClientInterceptor(),
+			interceptors.DebugStreamClientInterceptor(debugMetadata),
+		),
 		rpcutil.GrpcChannelOptions())
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to language host: %w", err)

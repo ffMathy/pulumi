@@ -36,6 +36,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
 
+	"github.com/pulumi/grpc-debug-interceptors"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/cmdutil"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
@@ -116,12 +118,28 @@ var errRunPolicyModuleNotFound = errors.New("pulumi SDK does not support policy 
 var errPluginNotFound = errors.New("plugin not found")
 
 func dialPlugin(port, bin, prefix string) (*grpc.ClientConn, error) {
+
+	portNum, _ := strconv.Atoi(port)
+
+	debugMetadata := map[string]interface{}{
+		"mode":   "client",
+		"port":   int(portNum),
+		"bin":    bin,
+		"prefix": prefix,
+	}
+
 	// Now that we have the port, go ahead and create a gRPC client connection to it.
 	conn, err := grpc.Dial(
 		"127.0.0.1:"+port,
 		grpc.WithInsecure(),
-		grpc.WithUnaryInterceptor(rpcutil.OpenTracingClientInterceptor()),
-		grpc.WithStreamInterceptor(rpcutil.OpenTracingStreamClientInterceptor()),
+		grpc.WithChainUnaryInterceptor(
+			rpcutil.OpenTracingClientInterceptor(),
+			interceptors.DebugClientInterceptor(debugMetadata),
+		),
+		grpc.WithChainStreamInterceptor(
+			rpcutil.OpenTracingStreamClientInterceptor(),
+			interceptors.DebugStreamClientInterceptor(debugMetadata),
+		),
 		rpcutil.GrpcChannelOptions(),
 	)
 	if err != nil {

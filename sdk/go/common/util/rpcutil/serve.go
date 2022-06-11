@@ -26,6 +26,8 @@ import (
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+
+	"github.com/pulumi/grpc-debug-interceptors"
 )
 
 // maxRPCMessageSize raises the gRPC Max Message size from `4194304` (4mb) to `419430400` (400mb)
@@ -60,10 +62,21 @@ func Serve(port int, cancel chan bool, registers []func(*grpc.Server) error,
 
 	health := health.NewServer()
 
+	debugMetadata := map[string]interface{}{
+		"mode": "server",
+		"port": port,
+	}
+
 	// Now new up a gRPC server and register any RPC interfaces the caller wants.
 	srv := grpc.NewServer(
-		grpc.UnaryInterceptor(OpenTracingServerInterceptor(parentSpan, options...)),
-		grpc.StreamInterceptor(OpenTracingStreamServerInterceptor(parentSpan, options...)),
+		grpc.ChainUnaryInterceptor(
+			OpenTracingServerInterceptor(parentSpan, options...),
+			interceptors.DebugServerInterceptor(debugMetadata),
+		),
+		grpc.ChainStreamInterceptor(
+			OpenTracingStreamServerInterceptor(parentSpan, options...),
+			interceptors.DebugStreamServerInterceptor(debugMetadata),
+		),
 		grpc.MaxRecvMsgSize(maxRPCMessageSize),
 	)
 	for _, register := range registers {
@@ -85,6 +98,7 @@ func Serve(port int, cancel chan bool, registers []func(*grpc.Server) error,
 		tcpl := lis.(*net.TCPListener)
 		tcpa := tcpl.Addr().(*net.TCPAddr)
 		port = tcpa.Port
+		debugMetadata["port"] = port
 	}
 
 	// If the caller provided a cancellation channel, start a goroutine that will gracefully terminate the gRPC server when

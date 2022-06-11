@@ -20,6 +20,8 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"github.com/pulumi/grpc-debug-interceptors"
+
 	"github.com/pulumi/pulumi/pkg/v3/version"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 )
@@ -45,9 +47,17 @@ func panicHandler() {
 
 func main() {
 	defer panicHandler()
+	initDebugGRPCTracing()
 	if err := NewPulumiCmd().Execute(); err != nil {
 		_, err = fmt.Fprintf(os.Stderr, "An error occurred: %v\n", err)
 		contract.IgnoreError(err)
 		os.Exit(1)
+	}
+}
+
+func initDebugGRPCTracing() {
+	if logFile := os.Getenv("PULUMI_DEBUG_GRPC"); logFile != "" {
+		err := interceptors.InitDebugInterceptors(logFile)
+		contract.AssertNoError(err)
 	}
 }
