@@ -1645,7 +1645,7 @@ func (mod *modContext) genTypes() ([]*ioFile, error) {
 	// If there are no namespaces, then we generate empty
 	// input and output files.
 	if namespaces[""] == nil {
-		return nil, fmt.Errorf("Encountered a nil top-level namespace. The top-level namespace cannot be nil, even if it is empty.")
+		return nil, fmt.Errorf("encountered a nil top-level namespace, and namespaces can't be nil even if it is empty")
 	}
 	// Iterate through the namespaces, generating one per node in the tree.
 	if inputFiles, err = namespaces[""].intoIOFiles(inputCtx, "./types"); err != nil {
@@ -1702,9 +1702,8 @@ func (ctx *ioContext) filename(dirRoot string) string {
 func (ctx *ioContext) filetype() string {
 	if ctx.input {
 		return "input"
-	} else {
-		return "output"
 	}
+	return "output"
 }
 
 // intoIOFiles converts this namespace into one or more files.
@@ -2187,7 +2186,7 @@ func (mod *modContext) gen(fs fs) error {
 			return err
 		}
 		for _, file := range files {
-			fs.add(file.name(), []byte(file.contents()))
+			fs.add(file.name(), file.contents())
 		}
 	}
 
