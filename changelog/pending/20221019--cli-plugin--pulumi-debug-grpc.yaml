@@ -1,0 +1,4 @@
+changes:
+- type: feat
+  scope: cli/plugin
+  description: "Enables tracing internal Pulumi GRPC traffic to a JSON log file for debugging: `PULUMI_DEBUG_GRPC=./debug.json pulumi up`"
