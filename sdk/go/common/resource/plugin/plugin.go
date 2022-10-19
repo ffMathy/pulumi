@@ -123,7 +123,7 @@ func dialPlugin(port, bin, prefix string) (*grpc.ClientConn, error) {
 
 	debugMetadata := map[string]interface{}{
 		"mode":   "client",
-		"port":   int(portNum),
+		"port":   portNum,
 		"bin":    bin,
 		"prefix": prefix,
 	}
