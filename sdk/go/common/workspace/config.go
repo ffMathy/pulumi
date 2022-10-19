@@ -67,7 +67,8 @@ func missingProjectConfigurationKeysError(missingProjectKeys []string, stackName
 func ValidateStackConfigAndApplyProjectConfig(
 	stackName string,
 	project *Project,
-	stackConfig config.Map) error {
+	stackConfig config.Map,
+	dec config.Decrypter) error {
 
 	if len(project.Config) > 0 {
 		// only when the project defines config values, do we need to validate the stack config
@@ -146,9 +147,28 @@ func ValidateStackConfigAndApplyProjectConfig(
 			// found value on the stack level
 			// retrieve it and validate it against
 			// the config defined at the project level
-			content, contentError := stackValue.MarshalValue()
-			if contentError != nil {
-				return contentError
+
+			// First check if the project says this should be secret, and if so that the stack value is
+			// secure.
+			if projectConfigType.Secret && !stackValue.Secure() {
+				validationError := fmt.Errorf(
+					"Stack '%v' with configuration key '%v' must be encrypted as it's secret",
+					stackName,
+					projectConfigKey)
+				return validationError
+			}
+
+			value, err := stackValue.Value(dec)
+			if err != nil {
+				return err
+			}
+			// Content will be a JSON string if object is true, so marshal that back into an actual structure
+			var content interface{} = value
+			if stackValue.Object() {
+				err = json.Unmarshal([]byte(value), &content)
+				if err != nil {
+					return err
+				}
 			}
 
 			if !ValidateConfigValue(projectConfigType.Type, projectConfigType.Items, content) {

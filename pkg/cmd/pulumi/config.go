@@ -791,24 +791,16 @@ func listConfig(ctx context.Context,
 		return err
 	}
 
-	stackName := stack.Ref().Name().String()
-	// when listing configuration values
-	// also show values coming from the project
-	configError := workspace.ValidateStackConfigAndApplyProjectConfig(stackName, project, ps.Config)
-	if configError != nil {
-		return configError
-	}
-
 	cfg := ps.Config
 
 	// By default, we will use a blinding decrypter to show "[secret]". If requested, display secrets in plaintext.
 	decrypter := config.NewBlindingDecrypter()
 	if cfg.HasSecureValue() && showSecrets {
-		dec, decerr := getStackDecrypter(stack)
-		if decerr != nil {
-			return decerr
+		stackDecrypter, err := getStackDecrypter(stack)
+		if err != nil {
+			return err
 		}
-		decrypter = dec
+		decrypter = stackDecrypter
 	}
 
 	var keys config.KeyArray
@@ -886,11 +878,6 @@ func getConfig(ctx context.Context, stack backend.Stack, key config.Key, path, j
 	ps, err := loadProjectStack(project, stack)
 	if err != nil {
 		return err
-	}
-	stackName := stack.Ref().Name().String()
-	configError := workspace.ValidateStackConfigAndApplyProjectConfig(stackName, project, ps.Config)
-	if configError != nil {
-		return configError
 	}
 
 	cfg := ps.Config
