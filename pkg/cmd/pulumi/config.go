@@ -888,6 +888,12 @@ func getConfig(ctx context.Context, stack backend.Stack, key config.Key, path, j
 		return err
 	}
 
+	stackName := stack.Ref().Name().String()
+	// when asking for a configuration value, include values from the project config
+	err = workspace.ApplyProjectConfig(stackName, project, ps.Config)
+	if err != nil {
+		return err
+	}
 	cfg := ps.Config
 
 	v, ok, err := cfg.Get(key, path)
