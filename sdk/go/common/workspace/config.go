@@ -113,17 +113,6 @@ func DefaultStackConfigValidator() StackConfigValidator {
 	}
 }
 
-func NoopStackConfigValidator() StackConfigValidator {
-	return func(
-		stackName string,
-		projectConfigKey string,
-		projectConfigType ProjectConfigType,
-		stackValue config.Value,
-		dec config.Decrypter) error {
-		return nil
-	}
-}
-
 func ValidateStackConfigAndMergeProjectConfig(
 	stackName string,
 	project *Project,
