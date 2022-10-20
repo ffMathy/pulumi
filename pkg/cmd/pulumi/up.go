@@ -113,7 +113,7 @@ func newUpCmd() *cobra.Command {
 
 		decrypter, err := sm.Decrypter()
 		if err != nil {
-			return result.Errorf("getting stack decrypter: %w", err)
+			return result.FromError(fmt.Errorf("getting stack decrypter: %w", err))
 		}
 
 		configErr := workspace.ValidateStackConfigAndApplyProjectConfig(stack, proj, cfg.Config, decrypter)
@@ -357,7 +357,7 @@ func newUpCmd() *cobra.Command {
 
 		decrypter, err := sm.Decrypter()
 		if err != nil {
-			return result.Errorf("getting stack decrypter: %w", err)
+			return result.FromError(fmt.Errorf("getting stack decrypter: %w", err))
 		}
 
 		configErr := workspace.ValidateStackConfigAndApplyProjectConfig(stack, proj, cfg.Config, decrypter)

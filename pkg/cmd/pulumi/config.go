@@ -791,6 +791,14 @@ func listConfig(ctx context.Context,
 		return err
 	}
 
+	stackName := stack.Ref().Name().String()
+	// when listing configuration values
+	// also show values coming from the project
+	err = workspace.ApplyProjectConfig(stackName, project, ps.Config)
+	if err != nil {
+		return err
+	}
+
 	cfg := ps.Config
 
 	// By default, we will use a blinding decrypter to show "[secret]". If requested, display secrets in plaintext.

@@ -64,11 +64,72 @@ func missingProjectConfigurationKeysError(missingProjectKeys []string, stackName
 		isOrAre)
 }
 
-func ValidateStackConfigAndApplyProjectConfig(
+type StackName = string
+type ProjectConfigKey = string
+type StackConfigValidator = func(StackName, ProjectConfigKey, ProjectConfigType, config.Value, config.Decrypter) error
+
+func DefaultStackConfigValidator() StackConfigValidator {
+	return func(
+		stackName string,
+		projectConfigKey string,
+		projectConfigType ProjectConfigType,
+		stackValue config.Value,
+		dec config.Decrypter) error {
+		// First check if the project says this should be secret, and if so that the stack value is
+		// secure.
+		if projectConfigType.Secret && !stackValue.Secure() {
+			validationError := fmt.Errorf(
+				"Stack '%v' with configuration key '%v' must be encrypted as it's secret",
+				stackName,
+				projectConfigKey)
+			return validationError
+		}
+
+		value, err := stackValue.Value(dec)
+		if err != nil {
+			return err
+		}
+		// Content will be a JSON string if object is true, so marshal that back into an actual structure
+		var content interface{} = value
+		if stackValue.Object() {
+			err = json.Unmarshal([]byte(value), &content)
+			if err != nil {
+				return err
+			}
+		}
+
+		if !ValidateConfigValue(projectConfigType.Type, projectConfigType.Items, content) {
+			typeName := InferFullTypeName(projectConfigType.Type, projectConfigType.Items)
+			validationError := fmt.Errorf(
+				"Stack '%v' with configuration key '%v' must be of type '%v'",
+				stackName,
+				projectConfigKey,
+				typeName)
+
+			return validationError
+		}
+
+		return nil
+	}
+}
+
+func NoopStackConfigValidator() StackConfigValidator {
+	return func(
+		stackName string,
+		projectConfigKey string,
+		projectConfigType ProjectConfigType,
+		stackValue config.Value,
+		dec config.Decrypter) error {
+		return nil
+	}
+}
+
+func ValidateStackConfigAndMergeProjectConfig(
 	stackName string,
 	project *Project,
 	stackConfig config.Map,
-	dec config.Decrypter) error {
+	lazyDecrypter func() config.Decrypter,
+	validate StackConfigValidator) error {
 
 	if len(project.Config) > 0 {
 		// only when the project defines config values, do we need to validate the stack config
@@ -91,6 +152,7 @@ func ValidateStackConfigAndApplyProjectConfig(
 		}
 	}
 
+	var decrypter config.Decrypter
 	missingConfigurationKeys := make([]string, 0)
 	for projectConfigKey, projectConfigType := range project.Config {
 		var key config.Key
@@ -144,42 +206,20 @@ func ValidateStackConfigAndApplyProjectConfig(
 				return setError
 			}
 		} else {
-			// found value on the stack level
-			// retrieve it and validate it against
-			// the config defined at the project level
-
-			// First check if the project says this should be secret, and if so that the stack value is
-			// secure.
-			if projectConfigType.Secret && !stackValue.Secure() {
-				validationError := fmt.Errorf(
-					"Stack '%v' with configuration key '%v' must be encrypted as it's secret",
-					stackName,
-					projectConfigKey)
-				return validationError
-			}
-
-			value, err := stackValue.Value(dec)
-			if err != nil {
-				return err
-			}
-			// Content will be a JSON string if object is true, so marshal that back into an actual structure
-			var content interface{} = value
-			if stackValue.Object() {
-				err = json.Unmarshal([]byte(value), &content)
-				if err != nil {
-					return err
+			// Validate stack level value against the config defined at the project level
+			if validate != nil {
+				// we have a validator
+				if decrypter == nil && lazyDecrypter != nil {
+					// initialize the decrypter once
+					decrypter = lazyDecrypter()
 				}
-			}
 
-			if !ValidateConfigValue(projectConfigType.Type, projectConfigType.Items, content) {
-				typeName := InferFullTypeName(projectConfigType.Type, projectConfigType.Items)
-				validationError := fmt.Errorf(
-					"Stack '%v' with configuration key '%v' must be of type '%v'",
-					stackName,
-					projectConfigKey,
-					typeName)
-
-				return validationError
+				if decrypter != nil {
+					validationError := validate(stackName, projectConfigKey, projectConfigType, stackValue, decrypter)
+					if validationError != nil {
+						return validationError
+					}
+				}
 			}
 		}
 	}
@@ -191,4 +231,26 @@ func ValidateStackConfigAndApplyProjectConfig(
 	}
 
 	return nil
+}
+
+func ValidateStackConfigAndApplyProjectConfig(
+	stackName string,
+	project *Project,
+	stackConfig config.Map,
+	dec config.Decrypter) error {
+	decrypter := func() config.Decrypter {
+		return dec
+	}
+
+	configValidator := DefaultStackConfigValidator()
+
+	return ValidateStackConfigAndMergeProjectConfig(stackName, project, stackConfig, decrypter, configValidator)
+}
+
+// ApplyConfigDefaults applies the default values for the project configuration onto the stack configuration
+// without validating the contents of stack config values.
+// This is because sometimes during pulumi config ls and pulumi config get, if users are
+// using PassphraseDecrypter, we don't want to always prompt for the values when not necessary
+func ApplyProjectConfig(stackName string, project *Project, stackConfig config.Map) error {
+	return ValidateStackConfigAndMergeProjectConfig(stackName, project, stackConfig, nil, nil)
 }
